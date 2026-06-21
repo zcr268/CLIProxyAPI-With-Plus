@@ -3,8 +3,8 @@
 # 多阶段构建：在构建期内从上游仓库 clone 源码并编译
 # =============================================================================
 # 构建参数（可在 GitHub Actions 或 docker build --build-arg 中覆盖）
-ARG CPA_VERSION=main
-ARG CPAMP_VERSION=main
+ARG CPA_VERSION=v7.2.26
+ARG CPAMP_VERSION=v1.7.0
 ARG CPA_COMMIT=none
 ARG CPA_BUILD_DATE=unknown
 

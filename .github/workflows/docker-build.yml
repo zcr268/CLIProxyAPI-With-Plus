@@ -22,10 +22,9 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  # 默认版本（与 Dockerfile 保持一致）
-  # 两个上游默认都跟随 main；定时任务会检查最新 commit SHA 并重建镜像。
-  DEFAULT_CPA: main
-  DEFAULT_CPAMP: main
+  # 默认构建上游最新 Release；手动触发时可覆盖为指定 tag/branch。
+  DEFAULT_CPA: latest-release
+  DEFAULT_CPAMP: latest-release
 
 jobs:
   build-and-push:
@@ -41,9 +40,24 @@ jobs:
       - name: 确定构建版本
         id: versions
         run: |
-          # 优先级：手动输入 > schedule/push 用默认
-          CPA_VER="${{ github.event.inputs.cpa_version || env.DEFAULT_CPA }}"
-          CPAMP_VER="${{ github.event.inputs.cpamp_version || env.DEFAULT_CPAMP }}"
+          # 优先级：手动输入 > 自动解析上游最新 Release
+          CPA_INPUT="${{ github.event.inputs.cpa_version || '' }}"
+          CPAMP_INPUT="${{ github.event.inputs.cpamp_version || '' }}"
+
+          if [ -n "$CPA_INPUT" ]; then
+            CPA_VER="$CPA_INPUT"
+          else
+            CPA_VER=$(curl -fsSL "https://api.github.com/repos/router-for-me/CLIProxyAPI/releases/latest" \
+              | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])")
+          fi
+
+          if [ -n "$CPAMP_INPUT" ]; then
+            CPAMP_VER="$CPAMP_INPUT"
+          else
+            CPAMP_VER=$(curl -fsSL "https://api.github.com/repos/seakee/CPA-Manager-Plus/releases/latest" \
+              | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])")
+          fi
+
           echo "cpa_version=${CPA_VER}" >> $GITHUB_OUTPUT
           echo "cpamp_version=${CPAMP_VER}" >> $GITHUB_OUTPUT
 
