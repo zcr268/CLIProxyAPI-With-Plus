@@ -1,0 +1,35 @@
+# CPA 默认配置 - 由 entrypoint.sh 启动时通过环境变量覆盖
+# =============================================================
+
+host: ""
+port: 8317
+
+tls:
+  enable: false
+  cert: ""
+  key: ""
+
+# 管理 API 配置
+remote-management:
+  allow-remote: true
+  secret-key: "${CPA_MANAGEMENT_KEY}"
+  disable-control-panel: true
+  panel-github-repository: "https://github.com/seakee/CPA-Manager-Plus"
+
+# API 密钥（启动时从环境变量解析）
+api-keys:
+  - "${CPA_API_KEY_1}"
+  - "${CPA_API_KEY_2}"
+  - "${CPA_API_KEY_3}"
+
+auth-dir: "/data/auths"
+
+debug: false
+
+# 启用用量统计（CPAMP 需要用）
+usage-statistics-enabled: true
+
+redis-usage-queue-retention-seconds: 120
+
+# 其他可选配置
+# proxy: ""
