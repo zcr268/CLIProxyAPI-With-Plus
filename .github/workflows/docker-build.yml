@@ -1,0 +1,110 @@
+name: 构建并推送 Docker 镜像
+
+on:
+  # 代码推送时构建（用户主动更新）
+  push:
+    branches: [main]
+  # 每 6 小时自动检查上游更新
+  schedule:
+    - cron: '0 */6 * * *'
+  # 手动触发
+  workflow_dispatch:
+    inputs:
+      cpa_version:
+        description: 'CPA 版本（标签或分支，如 main, v7.2.22）'
+        required: false
+        default: ''
+      cpamp_version:
+        description: 'CPAMP 版本（标签，如 v1.7.0）'
+        required: false
+        default: ''
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  # 默认版本（与 Dockerfile 保持一致）
+  DEFAULT_CPA: main
+  DEFAULT_CPAMP: v1.7.0
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 确定构建版本
+        id: versions
+        run: |
+          # 优先级：手动输入 > schedule/push 用默认
+          CPA_VER="${{ github.event.inputs.cpa_version || env.DEFAULT_CPA }}"
+          CPAMP_VER="${{ github.event.inputs.cpamp_version || env.DEFAULT_CPAMP }}"
+          echo "cpa_version=${CPA_VER}" >> $GITHUB_OUTPUT
+          echo "cpamp_version=${CPAMP_VER}" >> $GITHUB_OUTPUT
+
+      - name: 获取上游最新 commit SHA（用于 Docker 缓存失效）
+        id: shas
+        run: |
+          CPA_VER="${{ steps.versions.outputs.cpa_version }}"
+          CPAMP_VER="${{ steps.versions.outputs.cpamp_version }}"
+
+          # 获取 CPA 最新 commit SHA
+          CPA_SHA=$(curl -sL \
+            "https://api.github.com/repos/router-for-me/CLIProxyAPI/commits/${CPA_VER}" \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('sha','unknown'))" \
+            2>/dev/null || echo "unknown")
+
+          # 获取 CPAMP 最新 commit SHA
+          CPAMP_SHA=$(curl -sL \
+            "https://api.github.com/repos/seakee/CPA-Manager-Plus/commits/${CPAMP_VER}" \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('sha','unknown'))" \
+            2>/dev/null || echo "unknown")
+
+          echo "cpa_head_sha=${CPA_SHA}" >> $GITHUB_OUTPUT
+          echo "cpamp_head_sha=${CPAMP_SHA}" >> $GITHUB_OUTPUT
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  CPA:   ${CPA_VER} @ ${CPA_SHA}"
+          echo "  CPAMP: ${CPAMP_VER} @ ${CPAMP_SHA}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: 设置 Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 登录到 GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 生成镜像标签
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short
+            type=raw,value=${{ steps.versions.outputs.cpa_version }}--${{ steps.versions.outputs.cpamp_version }}
+
+      - name: 构建并推送
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            CPA_VERSION=${{ steps.versions.outputs.cpa_version }}
+            CPAMP_VERSION=${{ steps.versions.outputs.cpamp_version }}
+            CPA_HEAD_SHA=${{ steps.shas.outputs.cpa_head_sha }}
+            CPAMP_HEAD_SHA=${{ steps.shas.outputs.cpamp_head_sha }}
+            CPA_COMMIT=${{ steps.shas.outputs.cpa_head_sha }}
+            CPA_BUILD_DATE=${{ github.event.repository.updated_at }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
