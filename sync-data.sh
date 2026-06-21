@@ -156,6 +156,10 @@ echo "  监控目录: ${DATA_DIR}"
 echo "  SQLite: usage.sqlite (+ -wal/-shm 安全处理)"
 echo "  (CPA 的 auths/ 和 config/ 由 CPA GitTokenStore 自动管理)"
 
+# idle 同步节流：mtime 不会因为“检查过 idle”自动变化，
+# 所以超过阈值后必须记录上次 idle 检查时间，避免每轮刷屏。
+LAST_IDLE_CHECK_AT=0
+
 while true; do
     sleep "$SYNC_INTERVAL"
 
@@ -173,9 +177,10 @@ while true; do
         NOW=$(date +%s)
         AGE=$((NOW - LAST_MOD))
 
-        if [ "$AGE" -gt "$IDLE_TIMEOUT" ]; then
-            echo "[sync-data] $(date '+%Y-%m-%d %H:%M:%S') usage.sqlite 空闲 ${AGE}s > 阈值 ${IDLE_TIMEOUT}s"
+        if [ "$AGE" -gt "$IDLE_TIMEOUT" ] && [ $((NOW - LAST_IDLE_CHECK_AT)) -ge "$IDLE_TIMEOUT" ]; then
+            echo "[sync-data] $(date '+%Y-%m-%d %H:%M:%S') usage.sqlite 空闲 ${AGE}s > 阈值 ${IDLE_TIMEOUT}s，执行 idle 检查"
             sync_once "idle" || true
+            LAST_IDLE_CHECK_AT="$NOW"
         fi
     fi
 done
