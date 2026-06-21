@@ -1,0 +1,36 @@
+diff --git a/apps/manager-server/internal/service/managerconfig/service.go b/apps/manager-server/internal/service/managerconfig/service.go
+index a4b3a2a..2ef419a 100644
+--- a/apps/manager-server/internal/service/managerconfig/service.go
++++ b/apps/manager-server/internal/service/managerconfig/service.go
+@@ -188,13 +188,12 @@ func (s *Service) ResolveManagerConfigWithSource(ctx context.Context) (store.Man
+ 	if s.cfg.CPAUpstreamURL != "" && s.cfg.ManagementKey != "" {
+ 		cfg.CPAConnection.CPABaseURL = cpa.NormalizeBaseURL(s.cfg.CPAUpstreamURL)
+ 		cfg.CPAConnection.ManagementKey = s.cfg.ManagementKey
+-		cfg.Collector.CollectorMode = CollectorMode(s.cfg.CollectorMode)
++		// 一体化部署只用环境/文件配置绑定 CPA 地址和管理密钥。
++		// 采集模式、轮询间隔、每批条数、查询上限等采集参数必须继续由
++		// CPAMP 自己的数据库/管理面板保存，不能被 Render 环境变量或容器
++		// 启动配置固定住。
+ 		cfg.Collector.Queue = ValueOr(s.cfg.Queue, cfg.Collector.Queue)
+ 		cfg.Collector.PopSide = NormalizePopSide(s.cfg.PopSide, cfg.Collector.PopSide)
+-		cfg.Collector.BatchSize = PositiveOrDefault(s.cfg.BatchSize, cfg.Collector.BatchSize, 100)
+-		cfg.Collector.PollIntervalMS = PositiveOrDefault(int(s.cfg.PollInterval/time.Millisecond), cfg.Collector.PollIntervalMS, 500)
+-		cfg.Collector.QueryLimit = PositiveOrDefault(s.cfg.QueryLimit, cfg.Collector.QueryLimit, 50000)
+-		cfg.Collector.TLSSkipVerify = s.cfg.TLSSkipVerify
+ 		source = SourceEnv
+ 		found = true
+ 	}
+@@ -259,12 +258,8 @@ func ManagerConfigConnectionDiffers(left store.ManagerConfig, right store.Manage
+ 	return cpa.NormalizeBaseURL(left.CPAConnection.CPABaseURL) != cpa.NormalizeBaseURL(right.CPAConnection.CPABaseURL) ||
+ 		left.CPAConnection.ManagementKey != right.CPAConnection.ManagementKey ||
+ 		ManagerCollectorEnabled(left) != ManagerCollectorEnabled(right) ||
+-		left.Collector.CollectorMode != right.Collector.CollectorMode ||
+ 		left.Collector.Queue != right.Collector.Queue ||
+-		left.Collector.PopSide != right.Collector.PopSide ||
+-		left.Collector.BatchSize != right.Collector.BatchSize ||
+-		left.Collector.PollIntervalMS != right.Collector.PollIntervalMS ||
+-		left.Collector.TLSSkipVerify != right.Collector.TLSSkipVerify
++		left.Collector.PopSide != right.Collector.PopSide
+ }
+ 
+ func ManagerConfigCPABindingDiffers(left store.ManagerConfig, right store.ManagerConfig) bool {
