@@ -15,7 +15,7 @@ on:
         required: false
         default: ''
       cpamp_version:
-        description: 'CPAMP 版本（标签，如 v1.7.0）'
+        description: 'CPAMP 版本（标签或分支，如 main, v1.7.0）'
         required: false
         default: ''
 
@@ -23,8 +23,9 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
   # 默认版本（与 Dockerfile 保持一致）
+  # 两个上游默认都跟随 main；定时任务会检查最新 commit SHA 并重建镜像。
   DEFAULT_CPA: main
-  DEFAULT_CPAMP: v1.7.0
+  DEFAULT_CPAMP: main
 
 jobs:
   build-and-push:

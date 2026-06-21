@@ -4,7 +4,7 @@
 # =============================================================================
 # 构建参数（可在 GitHub Actions 或 docker build --build-arg 中覆盖）
 ARG CPA_VERSION=main
-ARG CPAMP_VERSION=v1.7.0
+ARG CPAMP_VERSION=main
 ARG CPA_COMMIT=none
 ARG CPA_BUILD_DATE=unknown
 
