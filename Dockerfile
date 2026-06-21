@@ -101,7 +101,6 @@ COPY --from=cpa-builder /out/CLIProxyAPI /usr/local/bin/
 COPY --from=cpamp-builder /out/cpa-manager-plus /usr/local/bin/
 
 # 复制配置文件
-COPY etc/cpa-config.yaml /etc/cpa/config.yaml
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY supervisord.conf /etc/supervisor/supervisord.conf
 
