@@ -44,6 +44,24 @@ git config --global --add safe.directory "$DATA_DIR" 2>/dev/null || true
 git config user.name "CPA-Manager-Plus" 2>/dev/null || true
 git config user.email "cpamp@local" 2>/dev/null || true
 
+# 系统 git 不会自动读取 CPA 的 GITSTORE_* 认证信息；这里用 GIT_ASKPASS
+# 把 DATA_REPO/GIT_USERNAME/GIT_TOKEN 传给 git push，避免交互式提示失败：
+# fatal: could not read Username for 'https://...': No such device or address
+if [ -n "${GIT_TOKEN:-}" ]; then
+    GIT_ASKPASS_FILE="/tmp/git-askpass-cpamp.sh"
+    cat > "$GIT_ASKPASS_FILE" <<'EOF'
+#!/bin/sh
+case "$1" in
+    *Username*) printf '%s\n' "${GIT_USERNAME:-git}" ;;
+    *Password*) printf '%s\n' "${GIT_TOKEN:-}" ;;
+    *) printf '\n' ;;
+esac
+EOF
+    chmod 700 "$GIT_ASKPASS_FILE"
+    export GIT_ASKPASS="$GIT_ASKPASS_FILE"
+    export GIT_TERMINAL_PROMPT=0
+fi
+
 # SQLite 文件集合
 SQLITE_FILES=("usage.sqlite" "usage.sqlite-wal" "usage.sqlite-shm" "data.key")
 

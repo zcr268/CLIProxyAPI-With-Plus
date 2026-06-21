@@ -147,11 +147,12 @@ fi
 
 export CPA_UPSTREAM_URL="${CPA_UPSTREAM_URL:-http://127.0.0.1:8317}"
 
-# 传递 CPA 管理密钥给 CPAMP
+# 传递 CPA 管理密钥给 CPAMP；一体化部署默认复用同一个密码。
+# 如果用户显式设置 CPA_MANAGER_ADMIN_KEY，则以显式设置为准；否则使用 CPA_MANAGEMENT_KEY。
 if [ -n "${CPA_MANAGEMENT_KEY}" ] && [ "${CPA_MANAGEMENT_KEY}" != "changeme" ]; then
     export CPA_MANAGEMENT_KEY="${CPA_MANAGEMENT_KEY}"
-fi
-if [ -n "${CPA_MANAGER_ADMIN_KEY}" ]; then
+    export CPA_MANAGER_ADMIN_KEY="${CPA_MANAGER_ADMIN_KEY:-${CPA_MANAGEMENT_KEY}}"
+elif [ -n "${CPA_MANAGER_ADMIN_KEY}" ]; then
     export CPA_MANAGER_ADMIN_KEY="${CPA_MANAGER_ADMIN_KEY}"
 fi
 

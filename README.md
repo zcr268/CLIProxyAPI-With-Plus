@@ -108,9 +108,9 @@
 |---|---|---|---|
 | `CPA_MANAGEMENT_KEY` | ✅ 必填 | - | CPA 管理 API 密钥（**自己设一个复杂密码**） |
 | `CPA_API_KEYS` | ✅ 必填 | - | API 调用密钥，逗号分隔（如 `sk-key1,sk-key2`） |
-| `DATA_REPO` | ⬜ 可选 | - | 私有数据仓库 URL（如 `https://github.com/你的用户名/cpa-data.git`） |
-| `GIT_TOKEN` | 配合 DATA_REPO | - | 有数据仓库写入权限的 GitHub PAT |
-| `CPA_MANAGER_ADMIN_KEY` | ⬜ 可选 | 自动生成 | CPAMP 管理面板的管理员密码 |
+| `DATA_REPO` | ⬜ 可选 | - | 私有数据仓库 URL（如 `https://github.com/你的用户名/cpa-data.git` 或 `https://gitee.com/你的用户名/cpa-data.git`） |
+| `GIT_TOKEN` | 配合 DATA_REPO | - | 有数据仓库写入权限的 Git 凭据（GitHub PAT / Gitee 私人令牌等） |
+| `CPA_MANAGER_ADMIN_KEY` | ⬜ 可选 | 同 `CPA_MANAGEMENT_KEY` | CPAMP 管理面板管理员密码；一体化部署默认复用 CPA 管理密钥 |
 
 **`DATA_REPO` 配置后，CPA 会自动启用 GitStore 模式：**
 - CPA 将认证文件（auths/*.json）和配置（config/config.yaml）自动 commit/push 到该仓库
@@ -130,16 +130,13 @@
 | `SYNC_INTERVAL` | `120` | CPAMP 数据同步检查间隔（秒） |
 | `IDLE_TIMEOUT` | `480` | 空闲判定阈值（秒），默认 8 分钟 |
 | `DATA_BRANCH` | `main` | 数据仓库分支 |
-| `GIT_USERNAME` | `git` | Git 认证用户名（通常不用改）
+| `GIT_USERNAME` | `git` | Git 认证用户名；Gitee 通常需要设置为真实用户名 |
 
 5. **点击 "Create Web Service"**
 
-6. **首次启动后，查看日志获取 CPAMP 管理员密码**（如果你没设 `CPA_MANAGER_ADMIN_KEY`）：
-   ```
-   CPA Manager Plus admin key generated: cmp_admin_xxxxxxxxxxxx
-   ```
-   打开 `https://你的应用名.onrender.com/management.html`
-   用这个 key 登录管理面板。
+6. **打开 CPAMP 管理面板**：
+   打开 `https://你的应用名.onrender.com/management.html`，默认使用 `CPA_MANAGEMENT_KEY` 登录。
+   如果你显式设置了 `CPA_MANAGER_ADMIN_KEY`，则使用该值登录。
 
 ### 2. 本地构建测试
 
@@ -169,7 +166,7 @@ open http://localhost:8080/management.html
 ### 首次使用（Full Docker 模式）
 
 1. 打开 `https://你的应用名.onrender.com/management.html`
-2. 输入 Admin Key（来自环境变量 `CPA_MANAGER_ADMIN_KEY` 或首次启动日志）
+2. 输入 Admin Key：默认就是 `CPA_MANAGEMENT_KEY`；如果显式设置了 `CPA_MANAGER_ADMIN_KEY`，则使用 `CPA_MANAGER_ADMIN_KEY`
 3. 设置向导：
    - **CPA URL**：容器内地址填写 `http://127.0.0.1:8317`
    - **CPA Management Key**：填写你在环境变量中设置的 `CPA_MANAGEMENT_KEY` 值
@@ -208,12 +205,11 @@ docker pull ghcr.io/你的用户名/cliproxyapi-with-plus:v7.2.22--v1.7.0
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `CPA_MANAGER_ADMIN_KEY` | 自动生成 | 管理面板管理员密码 |
-| `SYNC_INTERVAL` | `300` | 数据同步间隔（秒） |
-| `IDLE_TIMEOUT` | `600` | 空闲判定阈值（秒） |
+| `CPA_MANAGER_ADMIN_KEY` | 同 `CPA_MANAGEMENT_KEY` | 管理面板管理员密码；通常不用单独设置 |
+| `SYNC_INTERVAL` | `120` | 数据同步间隔（秒） |
+| `IDLE_TIMEOUT` | `480` | 空闲判定阈值（秒） |
 | `DATA_BRANCH` | `main` | 数据仓库分支 |
-| `GIT_USER_NAME` | `CPA Bot` | Git 提交用户名 |
-| `GIT_USER_EMAIL` | `cpa-bot@localhost` | Git 提交邮箱 |
+| `GIT_USERNAME` | `git` | Git 认证用户名；Gitee 通常需要设置为真实用户名 |
 
 ### Render 自动设置
 
