@@ -14,9 +14,58 @@ sed "s/{{PORT}}/${RENDER_PORT}/g" -i "$NGINX_CONF"
 echo "[entrypoint] Nginx configured to listen on port ${RENDER_PORT}"
 
 # ------------------------------------------------------------------
-# 第2步：生成 CPA 初始配置文件（用于 git store 首次 bootstrap）
+# 第2步：强制校验 GitStore 持久化参数
+#        一体化部署不再提供本地兜底模式；没有 DATA_REPO 时直接失败，
+#        避免 Render 休眠/重启后数据丢失。
+# ------------------------------------------------------------------
+DATA_REPO="${DATA_REPO:-}"
+GIT_TOKEN="${GIT_TOKEN:-}"
+DATA_BRANCH="${DATA_BRANCH:-main}"
+
+if [ -z "$DATA_REPO" ]; then
+    echo "[entrypoint] ERROR: DATA_REPO 未设置。此镜像已禁用本地兜底模式，必须配置 GitStore 数据仓库。" >&2
+    exit 1
+fi
+
+if [ -z "$GIT_TOKEN" ]; then
+    echo "[entrypoint] ERROR: GIT_TOKEN 未设置。必须提供可读写 DATA_REPO 的 Git 凭据。" >&2
+    exit 1
+fi
+
+if ! printf '%s' "$DATA_REPO" | grep -Eq '^https?://'; then
+    echo "[entrypoint] ERROR: DATA_REPO 目前只支持 http(s) URL：${DATA_REPO}" >&2
+    exit 1
+fi
+
+echo "[entrypoint] GitStore 参数校验通过"
+echo "  Git repo: ${DATA_REPO} (branch: ${DATA_BRANCH})"
+echo "  Git user: ${GIT_USERNAME:-git}"
+
+# 用系统 git 先验证远端认证，避免 CPA 启动后才反复重启。
+GIT_ASKPASS_FILE="/tmp/git-askpass-entrypoint.sh"
+cat > "$GIT_ASKPASS_FILE" <<'EOF'
+#!/bin/sh
+case "$1" in
+    *Username*) printf '%s\n' "${GIT_USERNAME:-git}" ;;
+    *Password*) printf '%s\n' "${GIT_TOKEN:-}" ;;
+    *) printf '\n' ;;
+esac
+EOF
+chmod 700 "$GIT_ASKPASS_FILE"
+export GIT_ASKPASS="$GIT_ASKPASS_FILE"
+export GIT_TERMINAL_PROMPT=0
+
+if ! timeout 30 git ls-remote "$DATA_REPO" >/dev/null 2>&1; then
+    echo "[entrypoint] ERROR: 无法访问 DATA_REPO，请检查 DATA_REPO/GIT_USERNAME/GIT_TOKEN/DATA_BRANCH 权限。" >&2
+    exit 1
+fi
+
+echo "[entrypoint] Git 远端认证验证通过"
+
+# ------------------------------------------------------------------
+# 第3步：生成 CPA GitStore 初始配置文件
 #        路径：/data/config.example.yaml
-#        CPA 的 git store 首次启动时，如果 gitstore/config/config.yaml
+#        CPA 的 GitStore 首次启动时，如果 gitstore/config/config.yaml
 #        不存在，会从 config.example.yaml 复制过去并提交到 git。
 # ------------------------------------------------------------------
 echo "[entrypoint] Generating CPA config example..."
@@ -51,7 +100,7 @@ tls:
 
 remote-management:
   allow-remote: true
-  secret-key: "${CPA_MANAGEMENT_KEY}"
+  secret-key: ""
   disable-control-panel: true
 
 api-keys:
@@ -67,36 +116,8 @@ CPAEOF
 
 echo "[entrypoint] CPA config example written to /data/config.example.yaml"
 
-# 同时写入 /etc/cpa/config.yaml 作为非 git store 模式的兜底配置
-cat > /etc/cpa/config.yaml << CPAEOF2
-# CPA 本地配置 — 非 git store 模式时使用
-host: ""
-port: ${CPA_PORT:-8317}
-
-tls:
-  enable: false
-  cert: ""
-  key: ""
-
-remote-management:
-  allow-remote: true
-  secret-key: "${CPA_MANAGEMENT_KEY}"
-  disable-control-panel: true
-
-api-keys:
-${API_KEYS_YAML}
-
-auth-dir: "/data/auths"
-
-debug: false
-usage-statistics-enabled: true
-redis-usage-queue-retention-seconds: 120
-${PROXY_CONFIG}
-CPAEOF2
-echo "[entrypoint] CPA local config written to /etc/cpa/config.yaml"
-
 # ------------------------------------------------------------------
-# 第3步：配置 Git 数据持久化（可选）
+# 第4步：配置 Git 数据持久化（强制）
 #        CPA 内置的 GitTokenStore（GITSTORE_* 环境变量）
 #        数据统一放在 /data/gitstore/ 目录下：
 #          /data/gitstore/auths/*.json          ← CPA 管理
@@ -104,46 +125,27 @@ echo "[entrypoint] CPA local config written to /etc/cpa/config.yaml"
 #          /data/gitstore/usage.sqlite           ← CPAMP 同步
 #          /data/gitstore/data.key               ← CPAMP 同步
 # ------------------------------------------------------------------
-DATA_REPO="${DATA_REPO:-}"
-GIT_TOKEN="${GIT_TOKEN:-}"
-DATA_BRANCH="${DATA_BRANCH:-main}"
+echo "[entrypoint] Configuring CPA GitStore + CPAMP data persistence..."
+echo "  Git repo: ${DATA_REPO} (branch: ${DATA_BRANCH})"
 
-if [ -n "$DATA_REPO" ]; then
-    echo "[entrypoint] Configuring CPA GitStore + CPAMP data persistence..."
-    echo "  Git repo: ${DATA_REPO} (branch: ${DATA_BRANCH})"
+export GITSTORE_GIT_URL="${DATA_REPO}"
+export GITSTORE_GIT_USERNAME="${GIT_USERNAME:-git}"
+export GITSTORE_GIT_TOKEN="${GIT_TOKEN}"
+export GITSTORE_GIT_BRANCH="${DATA_BRANCH}"
+# 关键：local path 决定 git 工作树位置
+# CPA 会 clone/pull 到 ${GITSTORE_LOCAL_PATH}/gitstore/
+export GITSTORE_LOCAL_PATH="/data"
 
-    # 设置 CPA 内置 GitStore 环境变量
-    export GITSTORE_GIT_URL="${DATA_REPO}"
-    export GITSTORE_GIT_USERNAME="${GIT_USERNAME:-git}"
-    export GITSTORE_GIT_TOKEN="${GIT_TOKEN}"
-    export GITSTORE_GIT_BRANCH="${DATA_BRANCH}"
-    # 关键：local path 决定 git 工作树位置
-    # CPA 会 clone/pull 到 ${GITSTORE_LOCAL_PATH}/gitstore/
-    export GITSTORE_LOCAL_PATH="/data"
-
-    export CPAMP_GIT_MODE="true"
-    echo "[entrypoint] CPA GitStore enabled: /data/gitstore/"
-else
-    echo "[entrypoint] DATA_REPO not set — 不使用 Git 持久化"
-    echo "  CPA 使用本地文件存储，容器重启后数据丢失！"
-    # 不使用 git store 时，CPA 用 -config 参数加载本地配置
-    # 不需要额外设置
-fi
+export CPAMP_GIT_MODE="true"
+echo "[entrypoint] CPA GitStore enabled: /data/gitstore/"
 
 # ------------------------------------------------------------------
-# 第4步：设置 CPAMP 环境变量
-#        使用 git store 时，数据目录设为 /data/gitstore/（与 CPA 同仓库）
-#        不使用 git store 时，数据目录设为 /data/
+# 第5步：设置 CPAMP 环境变量
+#        数据目录固定为 /data/gitstore/（与 CPA 同仓库）
 # ------------------------------------------------------------------
 export HTTP_ADDR="127.0.0.1:${CPAMP_PORT:-18317}"
-
-if [ -n "$DATA_REPO" ]; then
-    export USAGE_DATA_DIR="/data/gitstore"
-    export USAGE_DB_PATH="/data/gitstore/usage.sqlite"
-else
-    export USAGE_DATA_DIR="/data"
-    export USAGE_DB_PATH="/data/usage.sqlite"
-fi
+export USAGE_DATA_DIR="/data/gitstore"
+export USAGE_DB_PATH="/data/gitstore/usage.sqlite"
 
 export CPA_UPSTREAM_URL="${CPA_UPSTREAM_URL:-http://127.0.0.1:8317}"
 

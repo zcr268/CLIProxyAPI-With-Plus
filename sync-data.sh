@@ -11,9 +11,14 @@ DATA_BRANCH="${DATA_BRANCH:-main}"
 SYNC_INTERVAL="${SYNC_INTERVAL:-120}"   # 2 分钟：Render 免费版休眠窗口较短，检查要更勤
 IDLE_TIMEOUT="${IDLE_TIMEOUT:-480}"     # 8 分钟：在 10 分钟休眠前提前同步
 
-# 如果没配数据仓库，静默循环（supervisord 不会反复重启）
+# 强制 GitStore：未配置数据仓库时直接失败，不做本地兜底。
 if [ -z "$DATA_REPO" ]; then
-    while true; do sleep 30; done
+    echo "[sync-data] ERROR: DATA_REPO 未设置，无法同步 CPAMP 数据" >&2
+    exit 1
+fi
+if [ -z "${GIT_TOKEN:-}" ]; then
+    echo "[sync-data] ERROR: GIT_TOKEN 未设置，无法推送 CPAMP 数据" >&2
+    exit 1
 fi
 
 # CPAMP 数据目录（与 CPA GitStore 工作树一致）

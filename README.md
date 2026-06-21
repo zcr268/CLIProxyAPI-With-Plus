@@ -108,18 +108,15 @@
 |---|---|---|---|
 | `CPA_MANAGEMENT_KEY` | ✅ 必填 | - | CPA 管理 API 密钥（**自己设一个复杂密码**） |
 | `CPA_API_KEYS` | ✅ 必填 | - | API 调用密钥，逗号分隔（如 `sk-key1,sk-key2`） |
-| `DATA_REPO` | ⬜ 可选 | - | 私有数据仓库 URL（如 `https://github.com/你的用户名/cpa-data.git` 或 `https://gitee.com/你的用户名/cpa-data.git`） |
-| `GIT_TOKEN` | 配合 DATA_REPO | - | 有数据仓库写入权限的 Git 凭据（GitHub PAT / Gitee 私人令牌等） |
+| `DATA_REPO` | ✅ 必填 | - | 私有数据仓库 URL（如 `https://github.com/你的用户名/cpa-data.git` 或 `https://gitee.com/你的用户名/cpa-data.git`） |
+| `GIT_TOKEN` | ✅ 必填 | - | 有数据仓库读写权限的 Git 凭据（GitHub PAT / Gitee 私人令牌等） |
 | `CPA_MANAGER_ADMIN_KEY` | ⬜ 可选 | 同 `CPA_MANAGEMENT_KEY` | CPAMP 管理面板管理员密码；一体化部署默认复用 CPA 管理密钥 |
 
-**`DATA_REPO` 配置后，CPA 会自动启用 GitStore 模式：**
+**本镜像强制使用 GitStore 模式：**
 - CPA 将认证文件（auths/*.json）和配置（config/config.yaml）自动 commit/push 到该仓库
 - CPAMP 的 usage.sqlite 和 data.key 存到同一个 Git 工作树，由 sync-data.sh 同步
-- 所有文件都在同一个 GitHub 仓库里，容器重启自动恢复
-
-**`DATA_REPO` 不配置时：**
-- CPA 使用本地文件存储
-- 容器重启后所有数据丢失
+- 所有文件都在同一个 Git 仓库里，容器重启自动恢复
+- 如果未配置 `DATA_REPO` 或 `GIT_TOKEN`，容器会在启动阶段直接失败，避免误用本地临时存储
 
 其他可选变量：
 
@@ -219,10 +216,10 @@ docker pull ghcr.io/你的用户名/cliproxyapi-with-plus:v7.2.22--v1.7.0
 
 ## 数据持久化注意事项
 
-- **如果不配 `DATA_REPO`**：容器重启/休眠后所有用量数据丢失
+- **必须配置 `DATA_REPO` 和 `GIT_TOKEN`**：未配置会启动失败，不再提供本地兜底
 - **建议使用私有仓库**：SQLite 文件可能包含敏感信息
-- **Token 权限最小化**：只需要目标数据仓库的 `Contents: Write`
-- **首次同步**：数据仓库为空时，脚本会自动初始化并推送
+- **Token 权限最小化**：需要目标数据仓库读写权限
+- **首次同步**：数据仓库为空时，CPA GitStore 会初始化 `auths/` 和 `config/`，CPAMP 同步脚本会写入 `usage.sqlite*` 和 `data.key`
 - **并发安全**：只有一个容器实例时安全；多实例不适用
 
 ## 构建参数
