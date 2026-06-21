@@ -19,13 +19,19 @@ fi
 # CPAMP 数据目录（与 CPA GitStore 工作树一致）
 DATA_DIR="/data/gitstore"
 
-echo "[sync-data] 等待 CPA GitStore 初始化 ${DATA_DIR}/.git ..."
+gitstore_ready() {
+    [ -d "${DATA_DIR}/.git" ] || return 1
+    git -C "${DATA_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 1
+    git -C "${DATA_DIR}" rev-parse --verify HEAD >/dev/null 2>&1 || return 1
+}
+
+echo "[sync-data] 等待 CPA GitStore 完成有效初始化 ${DATA_DIR} ..."
 for i in $(seq 1 120); do
-    if [ -d "${DATA_DIR}/.git" ]; then
+    if gitstore_ready; then
         break
     fi
     if [ "$i" -eq 120 ]; then
-        echo "[sync-data] 等待 GitStore 超时，退出以便 supervisord 重启"
+        echo "[sync-data] 等待 GitStore 超时：仓库没有有效 HEAD，通常是 DATA_REPO/GIT_TOKEN/GIT_USERNAME 认证失败"
         exit 1
     fi
     sleep 1
@@ -33,8 +39,10 @@ done
 
 cd "$DATA_DIR"
 
-# 避免 git 因 owner 不同报 dubious ownership
+# 避免 git 因 owner 不同报 dubious ownership，并为 CPAMP 同步提交设置固定作者
 git config --global --add safe.directory "$DATA_DIR" 2>/dev/null || true
+git config user.name "CPA-Manager-Plus" 2>/dev/null || true
+git config user.email "cpamp@local" 2>/dev/null || true
 
 # SQLite 文件集合
 SQLITE_FILES=("usage.sqlite" "usage.sqlite-wal" "usage.sqlite-shm" "data.key")
@@ -99,7 +107,7 @@ sync_once() {
 
     git commit -m "CPAMP data sync (${reason}) $(date -u '+%Y-%m-%dT%H:%M:%SZ')" 2>/dev/null || true
 
-    if git push origin "$DATA_BRANCH" 2>&1; then
+    if git push origin "HEAD:refs/heads/${DATA_BRANCH}" 2>&1; then
         echo "[sync-data] ✓ 推送成功 ($reason)"
     else
         echo "[sync-data] ✗ 推送失败，将在下次重试 ($reason)"
