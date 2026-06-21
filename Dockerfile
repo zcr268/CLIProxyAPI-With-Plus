@@ -119,13 +119,12 @@ RUN chmod +x /entrypoint.sh /usr/local/bin/sync-data.sh /usr/local/bin/start-cpa
 ENV TZ=Asia/Shanghai
 RUN ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && echo "${TZ}" > /etc/timezone
 
-# Render 的 PORT 环境变量默认 10000，我们用 8080 作为默认，
-# entrypoint 会替换为真实的 PORT
+# Render 的 PORT 环境变量默认 10000，entrypoint 会替换为真实的 PORT
 ENV CPA_PORT=8317
 ENV CPAMP_PORT=18317
 
 WORKDIR /data
 
-EXPOSE 8080
+EXPOSE 10000
 
 ENTRYPOINT ["/entrypoint.sh"]
