@@ -100,7 +100,7 @@ tls:
 
 remote-management:
   allow-remote: true
-  secret-key: ""
+  secret-key: "${CPA_MANAGEMENT_KEY}"
   disable-control-panel: true
 
 api-keys:
