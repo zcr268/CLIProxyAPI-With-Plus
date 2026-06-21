@@ -141,7 +141,7 @@
 # 构建镜像
 docker build \
   --build-arg CPA_VERSION=main \
-  --build-arg CPAMP_VERSION=v1.7.0 \
+  --build-arg CPAMP_VERSION=main \
   -t cpa-all-in-one .
 
 # 运行
@@ -178,6 +178,7 @@ open http://localhost:8080/management.html
 ## 从 GitHub Actions 构建
 
 每次推送代码到 `main` 分支，GitHub Actions 会自动构建并推送镜像到 `ghcr.io`。
+另外，定时任务会每 6 小时检查 CPA 和 CPAMP 上游 `main` 分支；只要任一上游有新 commit，就会自动重建并推送新的 `latest` 镜像。
 
 ### 手动触发构建指定版本
 
@@ -192,8 +193,8 @@ open http://localhost:8080/management.html
 # 拉取最新版
 docker pull ghcr.io/你的用户名/cliproxyapi-with-plus:latest
 
-# 拉取指定版本
-docker pull ghcr.io/你的用户名/cliproxyapi-with-plus:v7.2.22--v1.7.0
+# 拉取指定版本/分支组合
+docker pull ghcr.io/你的用户名/cliproxyapi-with-plus:main--main
 ```
 
 ## 环境变量参考
@@ -227,7 +228,7 @@ docker pull ghcr.io/你的用户名/cliproxyapi-with-plus:v7.2.22--v1.7.0
 | 参数 | 默认值 | 说明 |
 |---|---|---|
 | `CPA_VERSION` | `main` | CPA 版本标签或分支 |
-| `CPAMP_VERSION` | `v1.7.0` | CPAMP 版本标签 |
+| `CPAMP_VERSION` | `main` | CPAMP 版本标签或分支；默认跟随上游 main 自动更新 |
 | `CPA_COMMIT` | `none` | 构建时自动传入 commit SHA |
 | `CPA_BUILD_DATE` | `unknown` | 构建时自动传入时间戳 |
 
