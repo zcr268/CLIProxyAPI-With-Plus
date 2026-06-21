@@ -9,7 +9,7 @@ set -e
 # 第1步：处理 Render 端口替换
 # ------------------------------------------------------------------
 NGINX_CONF="/etc/nginx/nginx.conf"
-RENDER_PORT="${PORT:-8080}"
+RENDER_PORT="${PORT:-10000}"
 sed "s/{{PORT}}/${RENDER_PORT}/g" -i "$NGINX_CONF"
 echo "[entrypoint] Nginx configured to listen on port ${RENDER_PORT}"
 
@@ -90,7 +90,7 @@ fi
 cat > /data/config.example.yaml << CPAEOF
 # CPA config.example.yaml — 由 entrypoint.sh 自动生成
 # 首次启动时 CPA 的 GitStore 会使用此文件初始化 gitstore/config/config.yaml
-host: ""
+host: "127.0.0.1"
 port: ${CPA_PORT:-8317}
 
 tls:

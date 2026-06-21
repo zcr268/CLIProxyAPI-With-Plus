@@ -8,7 +8,7 @@
                     ┌──────────────────────────────────────┐
                     │           Docker 容器                  │
                     │                                        │
-                    │  浏览器 ──→ Nginx :8080 ──→ CPA :8317   │
+                    │  浏览器 ──→ Nginx :$PORT ──→ CPA :8317  │
                     │                    │                   │
                     │                    └──→ CPAMP :18317    │
                     │                            │           │
@@ -147,7 +147,7 @@ docker build \
 # 运行
 docker run -d \
   --name cpa-test \
-  -p 8080:8080 \
+  -p 8080:10000 \
   -e CPA_MANAGEMENT_KEY=my-secret-key \
   -e CPA_API_KEYS=sk-demo-key \
   -e DATA_REPO=https://github.com/你的用户名/cpa-data.git \
@@ -213,7 +213,7 @@ docker pull ghcr.io/你的用户名/cliproxyapi-with-plus:v7.2.26--v1.7.0
 
 | 变量 | 说明 |
 |---|---|
-| `PORT` | Render 自动设置，Nginx 会监听此端口 |
+| `PORT` | Render 自动设置，Nginx 会绑定到 `0.0.0.0:$PORT`；未设置时默认 `10000` |
 
 ## 数据持久化注意事项
 
