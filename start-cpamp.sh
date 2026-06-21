@@ -6,15 +6,21 @@
 # =============================================================================
 set -e
 
+gitstore_ready() {
+    [ -d /data/gitstore/.git ] || return 1
+    git -C /data/gitstore rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 1
+    git -C /data/gitstore rev-parse --verify HEAD >/dev/null 2>&1 || return 1
+}
+
 if [ -n "${DATA_REPO:-}" ]; then
-    echo "[start-cpamp] DATA_REPO 已设置，等待 CPA GitStore 初始化 /data/gitstore/.git ..."
+    echo "[start-cpamp] DATA_REPO 已设置，等待 CPA GitStore 完成有效初始化 /data/gitstore ..."
     for i in $(seq 1 120); do
-        if [ -d /data/gitstore/.git ]; then
+        if gitstore_ready; then
             echo "[start-cpamp] GitStore 已就绪，启动 CPA-Manager-Plus"
             break
         fi
         if [ "$i" -eq 120 ]; then
-            echo "[start-cpamp] 等待 GitStore 超时，退出以便 supervisord 重启"
+            echo "[start-cpamp] 等待 GitStore 超时：仓库没有有效 HEAD，通常是 DATA_REPO/GIT_TOKEN/GIT_USERNAME 认证失败"
             exit 1
         fi
         sleep 1
