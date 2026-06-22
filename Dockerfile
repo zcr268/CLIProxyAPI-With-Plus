@@ -113,7 +113,8 @@ COPY supervisord.conf /etc/supervisor/supervisord.conf
 COPY entrypoint.sh /entrypoint.sh
 COPY sync-data.sh /usr/local/bin/sync-data.sh
 COPY start-cpamp.sh /usr/local/bin/start-cpamp.sh
-RUN chmod +x /entrypoint.sh /usr/local/bin/sync-data.sh /usr/local/bin/start-cpamp.sh
+COPY start-nginx.sh /usr/local/bin/start-nginx.sh
+RUN chmod +x /entrypoint.sh /usr/local/bin/sync-data.sh /usr/local/bin/start-cpamp.sh /usr/local/bin/start-nginx.sh
 
 # 时区
 ENV TZ=Asia/Shanghai
