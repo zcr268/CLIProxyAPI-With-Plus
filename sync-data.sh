@@ -2,7 +2,7 @@
 # =============================================================================
 # 数据同步守护脚本（CPAMP SQLite 安全版）
 # CPA 内置的 GitTokenStore 负责 auths/* 和 config/config.yaml
-# 本脚本只处理 CPAMP SQLite 数据：usage.sqlite + WAL/SHM 安全 checkpoint
+# 本脚本只处理 CPAMP SQLite 数据：usage.sqlite .backup 一致快照 + integrity 校验
 # =============================================================================
 set -e
 
@@ -67,25 +67,52 @@ EOF
     export GIT_TERMINAL_PROMPT=0
 fi
 
-# SQLite 文件集合
-SQLITE_FILES=("usage.sqlite" "usage.sqlite-wal" "usage.sqlite-shm" "data.key")
+# 迁移：不再跟踪 live usage.sqlite，改用 usage.snapshot.sqlite
+if git ls-files --error-unmatch usage.sqlite >/dev/null 2>&1; then
+    echo "[sync-data] 迁移: 将 usage.sqlite 从 git 跟踪中移除（改用 usage.snapshot.sqlite）..."
+    git rm --cached usage.sqlite
+    git commit -m "chore: stop tracking live usage.sqlite, use usage.snapshot.sqlite" 2>/dev/null || true
+    if git push origin "HEAD:refs/heads/${DATA_BRANCH}" 2>&1; then
+        echo "[sync-data] ✓ 迁移推送成功"
+    else
+        echo "[sync-data] ! 迁移推送失败（下次启动会重试）"
+    fi
+fi
 
-sqlite_checkpoint() {
+# 同步到 git 的文件集合（快照文件，不直接跟踪 live usage.sqlite）
+SQLITE_FILES=("usage.snapshot.sqlite" "data.key")
+
+backup_and_verify() {
     # 如果 sqlite3 不存在或数据库还没创建，跳过
     if ! command -v sqlite3 >/dev/null 2>&1; then
-        return 0
+        echo "[sync-data] WARNING: sqlite3 不可用，跳过备份"
+        return 1
     fi
     if [ ! -f "usage.sqlite" ]; then
-        return 0
+        echo "[sync-data] usage.sqlite 不存在，跳过备份"
+        return 1
     fi
 
-    # PASSIVE 不阻塞写入；能合并多少合并多少。
-    # 返回三列：busy log checkpointed。busy=0 表示全部合并。
-    local out=""
-    out=$(sqlite3 "usage.sqlite" "PRAGMA wal_checkpoint(PASSIVE);" 2>/dev/null || true)
-    if [ -n "$out" ]; then
-        echo "[sync-data] SQLite checkpoint(PASSIVE): $out"
+    local snap=".usage.sqlite.snap.$$"
+    echo "[sync-data] 创建 SQLite 一致快照..."
+    if ! sqlite3 "usage.sqlite" ".backup ${snap}" 2>/dev/null; then
+        echo "[sync-data] ERROR: SQLite .backup 失败"
+        rm -f "$snap"
+        return 1
     fi
+
+    echo "[sync-data] 校验快照完整性..."
+    if ! sqlite3 "$snap" "PRAGMA quick_check(1);" 2>/dev/null | grep -q "ok"; then
+        echo "[sync-data] ERROR: 快照完整性校验失败（可能已损坏），放弃同步"
+        rm -f "$snap"
+        return 1
+    fi
+
+    # cp 替换同步用的副本（不碰 CPAMP 的 live usage.sqlite）
+    cp "$snap" "usage.snapshot.sqlite"
+    rm -f "$snap"
+    echo "[sync-data] ✓ 快照已验证并写入 usage.snapshot.sqlite"
+    return 0
 }
 
 changed_cpamp_files() {
@@ -93,7 +120,7 @@ changed_cpamp_files() {
 }
 
 stage_existing_cpamp_files() {
-    # 只 add 存在的文件；不存在的 WAL/SHM 不报错
+    # 只 add 存在的文件（usage.snapshot.sqlite + data.key）
     for f in "${SQLITE_FILES[@]}"; do
         if [ -e "$f" ]; then
             git add "$f" 2>/dev/null || true
@@ -107,7 +134,10 @@ stage_existing_cpamp_files() {
 sync_once() {
     local reason="$1"
 
-    sqlite_checkpoint
+    if ! backup_and_verify; then
+        echo "[sync-data] 备份或校验失败，跳过本次同步"
+        return 1
+    fi
 
     local changed=""
     changed=$(changed_cpamp_files)
@@ -153,7 +183,7 @@ echo "[sync-data] $(date '+%Y-%m-%d %H:%M:%S') 数据同步守护启动"
 echo "  仓库: ${DATA_REPO}"
 echo "  分支: ${DATA_BRANCH}"
 echo "  监控目录: ${DATA_DIR}"
-echo "  SQLite: usage.sqlite (+ -wal/-shm 安全处理)"
+echo "  SQLite: live usage.sqlite → 快照 usage.snapshot.sqlite (一致快照 + integrity 校验)"
 echo "  (CPA 的 auths/ 和 config/ 由 CPA GitTokenStore 自动管理)"
 
 # idle 同步节流：mtime 不会因为“检查过 idle”自动变化，
@@ -163,14 +193,11 @@ LAST_IDLE_CHECK_AT=0
 while true; do
     sleep "$SYNC_INTERVAL"
 
-    changed=$(changed_cpamp_files)
-    if [ -n "$changed" ]; then
-        sync_once "periodic" || true
-        continue
-    fi
+    # 每轮都尝试同步，内部 .backup + quick_check + git diff 决定是否有变更需提交
+    sync_once "periodic" || true
 
     # ----------------------------------------------------------
-    # 空闲预判：usage.sqlite 长时间未变更 → Render 可能即将休眠
+    # 空闲预判：live usage.sqlite 长时间未变更 → Render 可能即将休眠
     # ----------------------------------------------------------
     if [ -f "usage.sqlite" ]; then
         LAST_MOD=$(stat -c %Y "usage.sqlite" 2>/dev/null || stat -f %m "usage.sqlite" 2>/dev/null)
@@ -178,7 +205,7 @@ while true; do
         AGE=$((NOW - LAST_MOD))
 
         if [ "$AGE" -gt "$IDLE_TIMEOUT" ] && [ $((NOW - LAST_IDLE_CHECK_AT)) -ge "$IDLE_TIMEOUT" ]; then
-            echo "[sync-data] $(date '+%Y-%m-%d %H:%M:%S') usage.sqlite 空闲 ${AGE}s > 阈值 ${IDLE_TIMEOUT}s，执行 idle 检查"
+            echo "[sync-data] $(date '+%Y-%m-%d %H:%M:%S') usage.sqlite 空闲 ${AGE}s > 阈值 ${IDLE_TIMEOUT}s，执行 idle 同步"
             sync_once "idle" || true
             LAST_IDLE_CHECK_AT="$NOW"
         fi

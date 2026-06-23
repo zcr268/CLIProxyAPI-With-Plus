@@ -16,7 +16,7 @@ if [ -n "${DATA_REPO:-}" ]; then
     echo "[start-cpamp] DATA_REPO 已设置，等待 CPA GitStore 完成有效初始化 /data/gitstore ..."
     for i in $(seq 1 120); do
         if gitstore_ready; then
-            echo "[start-cpamp] GitStore 已就绪，启动 CPA-Manager-Plus"
+            echo "[start-cpamp] GitStore 已就绪"
             break
         fi
         if [ "$i" -eq 120 ]; then
@@ -25,6 +25,14 @@ if [ -n "${DATA_REPO:-}" ]; then
         fi
         sleep 1
     done
+
+    # 从同步快照恢复 live 数据库
+    if [ -f /data/gitstore/usage.snapshot.sqlite ]; then
+        cp /data/gitstore/usage.snapshot.sqlite /data/gitstore/usage.sqlite
+        echo "[start-cpamp] ✓ 从 usage.snapshot.sqlite 恢复 usage.sqlite"
+    else
+        echo "[start-cpamp] usage.snapshot.sqlite 不存在，使用已有 usage.sqlite（如有）"
+    fi
 else
     echo "[start-cpamp] DATA_REPO 未设置，直接启动 CPA-Manager-Plus"
 fi
