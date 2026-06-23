@@ -79,8 +79,8 @@ if git ls-files --error-unmatch usage.sqlite >/dev/null 2>&1; then
     fi
 fi
 
-# 同步到 git 的文件集合（快照文件，不直接跟踪 live usage.sqlite）
-SQLITE_FILES=("usage.snapshot.sqlite" "data.key")
+# 同步到 git 的文件集合（快照 + 密钥 + 插件目录）
+SQLITE_FILES=("usage.snapshot.sqlite" "data.key" "plugins/")
 
 backup_and_verify() {
     # 如果 sqlite3 不存在或数据库还没创建，跳过
@@ -120,7 +120,7 @@ changed_cpamp_files() {
 }
 
 stage_existing_cpamp_files() {
-    # 只 add 存在的文件（usage.snapshot.sqlite + data.key）
+    # 只 add 存在的文件（snapshot + data.key + plugins/）
     for f in "${SQLITE_FILES[@]}"; do
         if [ -e "$f" ]; then
             git add "$f" 2>/dev/null || true
@@ -184,6 +184,7 @@ echo "  仓库: ${DATA_REPO}"
 echo "  分支: ${DATA_BRANCH}"
 echo "  监控目录: ${DATA_DIR}"
 echo "  SQLite: live usage.sqlite → 快照 usage.snapshot.sqlite (一致快照 + integrity 校验)"
+echo "  插件:   plugins/ (git 同步)"
 echo "  (CPA 的 auths/ 和 config/ 由 CPA GitTokenStore 自动管理)"
 
 # idle 同步节流：mtime 不会因为“检查过 idle”自动变化，
