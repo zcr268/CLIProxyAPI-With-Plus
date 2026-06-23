@@ -29,7 +29,9 @@ if [ -n "${DATA_REPO:-}" ]; then
     # 从同步快照恢复 live 数据库
     if [ -f /data/gitstore/usage.snapshot.sqlite ]; then
         cp /data/gitstore/usage.snapshot.sqlite /data/gitstore/usage.sqlite
-        echo "[start-cpamp] ✓ 从 usage.snapshot.sqlite 恢复 usage.sqlite"
+        # 清理快照恢复后可能残留的 WAL/SHM 文件（不同 SQLite 实现可能产生不兼容的 WAL）
+        rm -f /data/gitstore/usage.sqlite-wal /data/gitstore/usage.sqlite-shm
+        echo "[start-cpamp] ✓ 从 usage.snapshot.sqlite 恢复 usage.sqlite（已清理 WAL/SHM）"
     else
         echo "[start-cpamp] usage.snapshot.sqlite 不存在，使用已有 usage.sqlite（如有）"
     fi

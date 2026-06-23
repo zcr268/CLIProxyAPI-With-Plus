@@ -79,8 +79,8 @@ if git ls-files --error-unmatch usage.sqlite >/dev/null 2>&1; then
     fi
 fi
 
-# 同步到 git 的文件集合（快照 + 密钥 + 插件目录）
-SQLITE_FILES=("usage.snapshot.sqlite" "data.key" "plugins/")
+# 同步到 git 的文件集合（快照 + 插件目录）
+SQLITE_FILES=("usage.snapshot.sqlite" "plugins/")
 
 backup_and_verify() {
     # 如果 sqlite3 不存在或数据库还没创建，跳过
@@ -95,8 +95,12 @@ backup_and_verify() {
 
     local snap=".usage.sqlite.snap.$$"
     echo "[sync-data] 创建 SQLite 一致快照..."
-    if ! sqlite3 "usage.sqlite" ".backup ${snap}" 2>/dev/null; then
-        echo "[sync-data] ERROR: SQLite .backup 失败"
+    # VACUUM INTO 创建一个全新的非 WAL 数据库文件，比 .backup 更安全：
+    # 1. 不受源库 WAL/journal 模式影响（输出永远是 clean 库）
+    # 2. 不依赖两个 SQLite 实现版本一致（sqlite3 CLI vs CPAMP 的 modernc.org/sqlite）
+    # 3. 自带完整性 — VACUUM 执行中会校验页结构
+    if ! sqlite3 "usage.sqlite" "VACUUM INTO '${snap}';" 2>/dev/null; then
+        echo "[sync-data] ERROR: SQLite VACUUM INTO 失败"
         rm -f "$snap"
         return 1
     fi
