@@ -48,4 +48,11 @@ else
     echo "[start-cpamp] DATA_REPO 未设置，直接启动 CPA-Manager-Plus"
 fi
 
-exec /usr/local/bin/cpa-manager-plus
+# CPAMP 启动包装：如果启动失败（如密钥不匹配），自动清理数据重试一次
+if ! /usr/local/bin/cpa-manager-plus; then
+    echo "[start-cpamp] ⚠ CPAMP 启动失败，清理数据重新初始化..."
+    rm -f /data/gitstore/usage.sqlite /data/gitstore/usage.snapshot.sqlite /data/gitstore/data.key
+    rm -f /data/gitstore/usage.sqlite-wal /data/gitstore/usage.sqlite-shm
+    echo "[start-cpamp] 第二次尝试启动 CPAMP..."
+    exec /usr/local/bin/cpa-manager-plus
+fi
