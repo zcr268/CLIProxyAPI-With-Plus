@@ -32,6 +32,15 @@ if [ -n "${DATA_REPO:-}" ]; then
         # 清理快照恢复后可能残留的 WAL/SHM 文件（不同 SQLite 实现可能产生不兼容的 WAL）
         rm -f /data/gitstore/usage.sqlite-wal /data/gitstore/usage.sqlite-shm
         echo "[start-cpamp] ✓ 从 usage.snapshot.sqlite 恢复 usage.sqlite（已清理 WAL/SHM）"
+
+        # 检测 data.key 丢失：有 snapshot 但没有 data.key → 密钥未被持久化（已知 bug）
+        # 此时 CPAMP 会生成新 key 但现有数据用旧 key 加密无法解密
+        # → 主动清理，让 CPAMP 从零初始化
+        if [ ! -f /data/gitstore/data.key ]; then
+            echo "[start-cpamp] ⚠ data.key 不存在 — 密钥丢失，清理数据从零初始化"
+            rm -f /data/gitstore/usage.sqlite /data/gitstore/usage.snapshot.sqlite
+            rm -f /data/gitstore/usage.sqlite-wal /data/gitstore/usage.sqlite-shm
+        fi
     else
         echo "[start-cpamp] usage.snapshot.sqlite 不存在，使用已有 usage.sqlite（如有）"
     fi

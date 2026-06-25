@@ -79,8 +79,26 @@ if git ls-files --error-unmatch usage.sqlite >/dev/null 2>&1; then
     fi
 fi
 
-# 同步到 git 的文件集合（快照 + 插件目录）
-SQLITE_FILES=("usage.snapshot.sqlite" "plugins/")
+# WAL/SHM 文件迁移：早期版本可能将 WAL/SHM 提交到 git，清理它们
+had_wal_migration=false
+for f in usage.sqlite-wal usage.sqlite-shm; do
+    if git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
+        echo "[sync-data] 迁移: 将 $f 从 git 跟踪中移除..."
+        git rm --cached "$f"
+        had_wal_migration=true
+    fi
+done
+if [ "$had_wal_migration" = true ]; then
+    git commit -m "chore: remove usage.sqlite-wal/shm from tracking" 2>/dev/null || true
+    if git push origin "HEAD:refs/heads/${DATA_BRANCH}" 2>&1; then
+        echo "[sync-data] ✓ WAL/SHM 迁移推送成功"
+    else
+        echo "[sync-data] ! WAL/SHM 迁移推送失败（下次启动会重试）"
+    fi
+fi
+
+# 同步到 git 的文件集合（快照 + 数据密钥 + 插件目录）
+SQLITE_FILES=("usage.snapshot.sqlite" "data.key" "plugins/")
 
 backup_and_verify() {
     # 如果 sqlite3 不存在或数据库还没创建，跳过
