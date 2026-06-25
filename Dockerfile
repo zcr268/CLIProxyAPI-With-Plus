@@ -67,17 +67,12 @@ ARG CPAMP_VERSION
 ARG CPAMP_HEAD_SHA
 RUN apk add --no-cache git
 WORKDIR /src
-COPY patches/cpamp-collector-db-config.patch /tmp/cpamp-collector-db-config.patch
 
 # 缓存失效标记：CPAMP_HEAD_SHA 变化时此层重建
 RUN echo "CPAMP HEAD SHA: ${CPAMP_HEAD_SHA}" > /tmp/cpamp-version.txt
 
 RUN git clone --depth 1 --branch ${CPAMP_VERSION} \
     https://github.com/seakee/CPA-Manager-Plus.git .
-
-# 一体化部署补丁：连接信息仍可由环境变量注入，但采集模式/轮询/批量/查询上限
-# 必须留给 CPAMP 数据库和管理面板管理，避免 Render 环境变量把页面配置锁死。
-RUN git apply /tmp/cpamp-collector-db-config.patch
 
 # 注入构建好的前端
 COPY --from=web-build /src/apps/web/dist/index.html \

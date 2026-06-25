@@ -33,13 +33,33 @@ if [ -n "${DATA_REPO:-}" ]; then
         rm -f /data/gitstore/usage.sqlite-wal /data/gitstore/usage.sqlite-shm
         echo "[start-cpamp] ✓ 从 usage.snapshot.sqlite 恢复 usage.sqlite（已清理 WAL/SHM）"
 
-        # 检测 data.key 丢失：有 snapshot 但没有 data.key → 密钥未被持久化（已知 bug）
-        # 此时 CPAMP 会生成新 key 但现有数据用旧 key 加密无法解密
-        # → 主动清理，让 CPAMP 从零初始化
+        # 检查是否需要清理数据
+        need_cleanup=false
+
+        # 条件1: data.key 丢失 → 密钥未被持久化，现有数据无法解密
         if [ ! -f /data/gitstore/data.key ]; then
             echo "[start-cpamp] ⚠ data.key 不存在 — 密钥丢失，清理数据从零初始化"
+            need_cleanup=true
+        fi
+
+        # 条件2: 数据库文件超过 15MB
+        if [ "$need_cleanup" = false ]; then
+            for f in usage.sqlite usage.snapshot.sqlite; do
+                if [ -f "/data/gitstore/$f" ]; then
+                    size_kb=$(du -k "/data/gitstore/$f" | cut -f1)
+                    if [ "$size_kb" -gt 15360 ]; then
+                        echo "[start-cpamp] ⚠ $f 大小 ${size_kb}KB 超过 15MB 限制，清理数据从零初始化"
+                        need_cleanup=true
+                        break
+                    fi
+                fi
+            done
+        fi
+
+        if [ "$need_cleanup" = true ]; then
             rm -f /data/gitstore/usage.sqlite /data/gitstore/usage.snapshot.sqlite
             rm -f /data/gitstore/usage.sqlite-wal /data/gitstore/usage.sqlite-shm
+            rm -f /data/gitstore/data.key
         fi
     else
         echo "[start-cpamp] usage.snapshot.sqlite 不存在，使用已有 usage.sqlite（如有）"
