@@ -80,6 +80,41 @@ if [ -n "${DATA_REPO:-}" ]; then
             rm -f /data/gitstore/usage.sqlite /data/gitstore/usage.snapshot.sqlite
             rm -f /data/gitstore/usage.sqlite-wal /data/gitstore/usage.sqlite-shm
             rm -f /data/gitstore/data.key
+
+            # 同时清理 git 跟踪，把数据库文件从远程仓库移除
+            echo "[start-cpamp] 清理 git 跟踪中的数据库文件..."
+            cd /data/gitstore
+            git config user.name "CPA-Manager-Plus" 2>/dev/null || true
+            git config user.email "cpamp@local" 2>/dev/null || true
+            if [ -n "${GIT_TOKEN:-}" ]; then
+                GIT_ASKPASS_FILE="/tmp/git-askpass-cpamp-clean.sh"
+                cat > "$GIT_ASKPASS_FILE" <<'ASKPASS'
+#!/bin/sh
+case "$1" in
+    *Username*) printf '%s\n' "${GIT_USERNAME:-git}" ;;
+    *Password*) printf '%s\n' "${GIT_TOKEN:-}" ;;
+    *) printf '\n' ;;
+esac
+ASKPASS
+                chmod 700 "$GIT_ASKPASS_FILE"
+                export GIT_ASKPASS="$GIT_ASKPASS_FILE"
+                export GIT_TERMINAL_PROMPT=0
+            fi
+            DATA_BRANCH="${DATA_BRANCH:-main}"
+            for gf in usage.snapshot.sqlite usage.sqlite data.key; do
+                git rm --cached --ignore-unmatch "$gf" 2>/dev/null || true
+            done
+            if git diff --cached --quiet 2>/dev/null; then
+                echo "[start-cpamp] git 中无可清理的数据库文件"
+            else
+                git commit -m "chore: cleanup database files from tracking" 2>/dev/null || true
+                if git push origin "HEAD:refs/heads/${DATA_BRANCH}" 2>&1; then
+                    echo "[start-cpamp] ✓ 数据库文件已从远程仓库移除"
+                else
+                    echo "[start-cpamp] ! 推送失败，文件仍保留在远程历史中"
+                fi
+            fi
+            rm -f /tmp/git-askpass-cpamp-clean.sh 2>/dev/null || true
         fi
     else
         echo "[start-cpamp] usage.snapshot.sqlite 不存在，使用已有 usage.sqlite（如有）"
