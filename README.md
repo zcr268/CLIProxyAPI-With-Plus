@@ -204,6 +204,9 @@ docker pull ghcr.io/你的用户名/cliproxyapi-with-plus:v7.2.26--v1.7.0
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `CPA_MANAGER_ADMIN_KEY` | 同 `CPA_MANAGEMENT_KEY` | 管理面板管理员密码；通常不用单独设置 |
+| `CPAMP_DB_MAX_MB` | `5` | 数据库大小上限（MB），超过此值启动时自动清库重建 |
+| `CPAMP_DB_CLEAN_ON_START` | - | 设为 `true` 每次启动强制清库，同时从 Git 仓库移除旧的数据库跟踪文件 |
+| `CPAMP_DB_BACKUP_ENABLED` | `true` | 是否定时备份 SQLite 到 Git 仓库；设为 `false` 关闭备份（entrypoint 跳过 sync-data 进程） |
 | `SYNC_INTERVAL` | `120` | 数据同步间隔（秒） |
 | `IDLE_TIMEOUT` | `480` | 空闲判定阈值（秒） |
 | `DATA_BRANCH` | `main` | 数据仓库分支 |
