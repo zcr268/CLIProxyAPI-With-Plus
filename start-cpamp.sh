@@ -3,8 +3,22 @@
 # CPA-Manager-Plus 启动包装脚本
 # 当启用 CPA GitStore 时，必须等待 CPA 先完成 /data/gitstore 初始化，
 # 避免 CPAMP 率先创建 SQLite 文件导致 CPA clone 工作树发生竞态。
+#
+# 环境变量：
+#   CPAMP_DB_MAX_MB             数据库大小上限（MB），超限自动清理，默认 5
+#   CPAMP_DB_CLEAN_ON_START     设为 true 则每次启动强制清理数据库
+#   CPAMP_DB_BACKUP_ENABLED     是否备份数据库到 Git，默认 true；设 false 关闭备份
 # =============================================================================
 set -e
+
+# 数据库大小上限（默认 5MB）
+CPAMP_DB_MAX_MB=${CPAMP_DB_MAX_MB:-5}
+# 检查是否是有效数字
+if ! [ "$CPAMP_DB_MAX_MB" -gt 0 ] 2>/dev/null; then
+    echo "[start-cpamp] ⚠ CPAMP_DB_MAX_MB 必须是正整数，使用默认 5"
+    CPAMP_DB_MAX_MB=5
+fi
+CPAMP_DB_MAX_KB=$((CPAMP_DB_MAX_MB * 1024))
 
 gitstore_ready() {
     [ -d /data/gitstore/.git ] || return 1
@@ -36,19 +50,25 @@ if [ -n "${DATA_REPO:-}" ]; then
         # 检查是否需要清理数据
         need_cleanup=false
 
-        # 条件1: data.key 丢失 → 密钥未被持久化，现有数据无法解密
-        if [ ! -f /data/gitstore/data.key ]; then
+        # 条件1: 环境变量 CPAMP_DB_CLEAN_ON_START=true → 每次启动强制清理
+        if [ "${CPAMP_DB_CLEAN_ON_START:-}" = "true" ]; then
+            echo "[start-cpamp] ⚠ CPAMP_DB_CLEAN_ON_START=true，强制清理数据库"
+            need_cleanup=true
+        fi
+
+        # 条件2: data.key 丢失 → 密钥未被持久化，现有数据无法解密
+        if [ "$need_cleanup" = false ] && [ ! -f /data/gitstore/data.key ]; then
             echo "[start-cpamp] ⚠ data.key 不存在 — 密钥丢失，清理数据从零初始化"
             need_cleanup=true
         fi
 
-        # 条件2: 数据库文件超过 15MB
+        # 条件3: 数据库文件超过 CPAMP_DB_MAX_MB
         if [ "$need_cleanup" = false ]; then
             for f in usage.sqlite usage.snapshot.sqlite; do
                 if [ -f "/data/gitstore/$f" ]; then
                     size_kb=$(du -k "/data/gitstore/$f" | cut -f1)
-                    if [ "$size_kb" -gt 15360 ]; then
-                        echo "[start-cpamp] ⚠ $f 大小 ${size_kb}KB 超过 15MB 限制，清理数据从零初始化"
+                    if [ "$size_kb" -gt "$CPAMP_DB_MAX_KB" ]; then
+                        echo "[start-cpamp] ⚠ $f 大小 ${size_kb}KB 超过 ${CPAMP_DB_MAX_MB}MB 限制，清理数据从零初始化"
                         need_cleanup=true
                         break
                     fi
