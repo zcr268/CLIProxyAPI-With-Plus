@@ -159,7 +159,17 @@ elif [ -n "${CPA_MANAGER_ADMIN_KEY}" ]; then
 fi
 
 # ------------------------------------------------------------------
-# 第5步：启动所有服务
+# 第5步（续）：根据环境变量调整 supervisor 服务
+# ------------------------------------------------------------------
+# 数据库备份开关：关闭时从 supervisor 中移除 sync-data 程序
+if [ "${CPAMP_DB_BACKUP_ENABLED:-true}" != "true" ]; then
+    echo "[entrypoint] CPAMP_DB_BACKUP_ENABLED=${CPAMP_DB_BACKUP_ENABLED}，禁用数据库备份同步"
+    # 用 sed 注释掉 sync-data 整段配置，supervisor 不会启动它
+    sed -i '/^\[program:sync-data\]/,/^\[/ s/^/#/' /etc/supervisor/supervisord.conf
+fi
+
+# ------------------------------------------------------------------
+# 第6步：启动所有服务
 # ------------------------------------------------------------------
 echo "[entrypoint] Starting services..."
 echo "  CPA  : http://127.0.0.1:${CPA_PORT:-8317}"
