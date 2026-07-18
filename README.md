@@ -199,6 +199,12 @@ docker pull ghcr.io/你的用户名/cliproxyapi-with-plus:v7.2.26--v1.7.0
 
 ## 环境变量参考
 
+### 模式切换
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `LOCAL_ONLY_MODE` | `false` | 设为 `true` 启用**纯本地数据模式**：跳过 `DATA_REPO`/`GIT_TOKEN` 校验，不导出 `GITSTORE_*`（CPA 回落到默认 file 存储），CPAMP SQLite 备份被自动关闭（`CPAMP_DB_BACKUP_ENABLED=false`），不再发起任何 git 操作。注意 CPA auths/config 落 `/data/`、CPAMP SQLite 落 `/data/local/`，两者**不在同一目录**（CPA file 模式的根由启动时工作目录决定，非环境变量可控） |
+
 ### CPAMP 可选变量
 
 | 变量 | 默认值 | 说明 |
@@ -206,7 +212,7 @@ docker pull ghcr.io/你的用户名/cliproxyapi-with-plus:v7.2.26--v1.7.0
 | `CPA_MANAGER_ADMIN_KEY` | 同 `CPA_MANAGEMENT_KEY` | 管理面板管理员密码；通常不用单独设置 |
 | `CPAMP_DB_MAX_MB` | `5` | 数据库大小上限（MB），超过此值启动时自动清库重建 |
 | `CPAMP_DB_CLEAN_ON_START` | - | 设为 `true` 每次启动强制清库，同时从 Git 仓库移除旧的数据库跟踪文件 |
-| `CPAMP_DB_BACKUP_ENABLED` | `true` | 是否定时备份 SQLite 到 Git 仓库；设为 `false` 关闭备份（entrypoint 跳过 sync-data 进程） |
+| `CPAMP_DB_BACKUP_ENABLED` | `true` | 是否定时备份 SQLite 到 Git 仓库；设为 `false` 关闭备份（entrypoint 跳过 sync-data 进程）。`LOCAL_ONLY_MODE=true` 时自动置为 `false` |
 | `SYNC_INTERVAL` | `120` | 数据同步间隔（秒） |
 | `IDLE_TIMEOUT` | `480` | 空闲判定阈值（秒） |
 | `DATA_BRANCH` | `main` | 数据仓库分支 |
@@ -220,11 +226,22 @@ docker pull ghcr.io/你的用户名/cliproxyapi-with-plus:v7.2.26--v1.7.0
 
 ## 数据持久化注意事项
 
-- **必须配置 `DATA_REPO` 和 `GIT_TOKEN`**：未配置会启动失败，不再提供本地兜底
+### GitStore 模式（默认，`LOCAL_ONLY_MODE` 未设置或 `false`）
+
+- **必须配置 `DATA_REPO` 和 `GIT_TOKEN`**：未配置会启动失败
 - **建议使用私有仓库**：SQLite 文件可能包含敏感信息
 - **Token 权限最小化**：需要目标数据仓库读写权限
 - **首次同步**：数据仓库为空时，CPA GitStore 会初始化 `auths/` 和 `config/`，CPAMP 同步脚本会写入 `usage.sqlite*` 和 `data.key`
 - **并发安全**：只有一个容器实例时安全；多实例不适用
+
+### LOCAL_ONLY_MODE 纯本地模式（`LOCAL_ONLY_MODE=true`）
+
+- **不需要任何 Git 配置**：`DATA_REPO`/`GIT_TOKEN`/`GIT_USERNAME`/`GITSTORE_*` 均不使用
+- **CPA 主程序**：无 `GITSTORE_*` → 自动回落到 file 存储。file 分支的下根目录是 CPA 启动时的当前目录（容器 `WORKDIR=/data`），因此 auths 落 `/data/auths/`，config 落 `/data/config.yaml`（**与 CPAMP 不在同一目录**）
+- **CPAMP SQLite**：由 entrypoint 显式设置 `USAGE_DATA_DIR=/data/local`、`USAGE_DB_PATH=/data/local/usage.sqlite`，落 `/data/local/`
+- **sync-data**：被禁用，不会有任何 git push
+- **数据不持久跨重启**：和 GitStore 模式不同，容器重新创建后 `/data/` 与 `/data/local/` 会丢失（volume 挂载 `/data` 则另当别论，视部署平台而定）
+- **与 GitStore 模式互不迁移**：切换模式时不会自动搬运数据。从 GitStore 切到 LOCAL：可把 `/data/gitstore/` 下的 `auths/`、`config/`、`usage.sqlite`、`data.key` 分别拷到 `/data/` 与 `/data/local/`（注意 auths 与 SQLite 不在同一目录）。反向同理
 
 ## 构建参数
 
