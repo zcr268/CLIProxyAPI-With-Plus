@@ -2,6 +2,23 @@
 
 将 **CLIProxyAPI**（CPA，AI API 代理）和 **CPA-Manager-Plus**（CPAMP，用量监控与管理面板）打包到同一个 Docker 镜像，**专为 Render 免费版设计**。
 
+## 新特性：LOCAL_ONLY_MODE（纯本地数据模式）
+
+新增 `LOCAL_ONLY_MODE` 环境变量总开关，设为 `true` 即可**完全关闭所有 Git 备份**，让两个组件的数据都透明地落本地磁盘：
+
+- 跳过 `DATA_REPO` / `GIT_TOKEN` 等所有 Git 参数校验
+- 不导出任何 `GITSTORE_*` 环境变量 → CPA 主程序自动回落到默认 file 存储后，auths/config 直接落本地磁盘
+- 自动置 `CPAMP_DB_BACKUP_ENABLED=false` → sync-data 守护脚本退出
+- 从 supervisord 配置中移除 sync-data 程序段
+
+> ⚠️ **两个子项目落盘目录不同**（已验证）：
+> - CPA auths → `/data/auths/`、CPA config → `/data/config.yaml`（由容器 `WORKDIR=/data` 决定，file 分支不受 `WRITABLE_PATH` 控制）
+> - CPAMP SQLite → `/data/local/usage.sqlite`（由 entrypoint 设的 `USAGE_DATA_DIR=/data/local` 决定）
+>
+> 切换模式时需手动迁移数据，且**无法跨容器重建持久化**（除非挂载 `/data` volume）。
+
+详细环境变量语义见 [环境变量参考 → 模式切换](#模式切换)。
+
 ## 架构
 
 ```
