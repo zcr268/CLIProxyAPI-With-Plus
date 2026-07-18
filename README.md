@@ -222,8 +222,10 @@ open http://localhost:8080/management.html
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `CPAMP_DB_MAX_MB` | `5` | 数据库大小上限（MB），超过此值启动时自动清库重建 |
-| `CPAMP_DB_CLEAN_ON_START` | - | 设为 `true` 每次启动强制清库，同时从 Git 仓库移除旧的数据库跟踪文件 |
+| `CPAMP_DB_MAX_MB` | `5` | 数据库大小上限（MB），超过此值启动时自动清理（清理范围由 `CPAMP_DB_CLEAN_TABLES` 控制） |
+| `CPAMP_DB_CLEAN_TABLES` | `USAGE` | 清理模式：`USAGE` 仅清用量统计（保留配置/认证状态），`FULL` 删除整个数据库重建，或逗号分隔表名列表精确指定要清空的表 |
+| `CPAMP_DB_KEEP_HOURS` | `72` | 保留最近 N 小时的用量事件（仅当清理范围包含 `usage_events` 表时生效；设为 `0` 则全部清除不保留） |
+| `CPAMP_DB_CLEAN_ON_START` | - | 设为 `true` 每次启动强制清理（等效 `CPAMP_DB_CLEAN_TABLES=USAGE`，保留配置/认证状态） |
 | `CPAMP_DB_BACKUP_ENABLED` | `true` | 是否定时备份 SQLite 到 Git 仓库；设为 `false` 关闭备份（entrypoint 跳过 sync-data 进程）。`LOCAL_ONLY_MODE=true` 时自动置为 `false` |
 | `SYNC_INTERVAL` | `120` | 数据同步间隔（秒） |
 | `IDLE_TIMEOUT` | `480` | 空闲判定阈值（秒） |
